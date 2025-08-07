@@ -1,14 +1,16 @@
 # RSI Alert Final Edition
+## (August 2025 Update - ADX Average Noise Filtering Support)
 
-A powerful MetaTrader 5 Expert Advisor (EA) for multi-timeframe RSI reversal and divergence monitoring with advanced noise filtering and bilingual support.
+A powerful MetaTrader 5 Expert Advisor (EA) for multi-timeframe RSI reversal and divergence monitoring with advanced signal fusion noise reduction, ADX trend strength filtering, and bilingual support.
 
 ## 🌟 Key Features
 
-- **Multi-timeframe RSI monitoring** - Monitor up to 5 different timeframes simultaneously
+- **Multi-timeframe RSI monitoring** - Monitor up to 4 different timeframes simultaneously (M30/H1/H4/D1 etc.)
+- **ADX average filtering** - Alerts only in ranging/weak trend zones, filtering strong trend false signals
 - **RSI reversal detection** - Automatic detection of oversold/overbought crossovers
 - **Divergence analysis** - Advanced bullish and bearish divergence detection
 - **Signal fusion mechanism** - Only strongest signal per bar across timeframes, avoiding duplicates
-- **Advanced noise filtering** - Integrated filtering using fractal patterns, extreme values, and signal intervals
+- **Triple noise filtering** - Integrated fractal patterns, extreme values, signal intervals, and ADX trend filtering
 - **Bilingual interface** - Switch between Chinese and English interfaces
 - **One-click controls** - Clear all signals and close all positions with single button clicks
 - **Customizable alerts** - Optional popup and sound notifications
@@ -36,7 +38,10 @@ A powerful MetaTrader 5 Expert Advisor (EA) for multi-timeframe RSI reversal and
 | `Lookback_Bars` | Number of bars to scan | 30 | 30 |
 | `MinDivergenceGap` | Minimum gap between divergence points | 5 | 5 |
 | `MinSignalInterval` | Minimum interval between same-direction signals | 8 | 8 |
-| `TF1-TF5` | Monitoring timeframes (up to 5) | M15/M30/H1/H4/D1 | Customize |
+| `ADX_Period` | **New**: ADX calculation period | 14 | 14 |
+| `ADX_Threshold` | **New**: ADX average filter ceiling | 25.0 | 15-30 |
+| `ADX_Avg_Window` | **New**: ADX average window | 5 | 3-8 |
+| `TF1-TF4` | Monitoring timeframes (up to 4) | M30/H1/H4/D1 | Customize |
 | `Sound_Alerts` | Enable popup/sound alerts | true | true/false |
 | `Sound_File` | Sound file name | alert.wav | alert.wav |
 | `Use_Chinese` | Use Chinese interface | false | true/false |
@@ -62,19 +67,27 @@ A powerful MetaTrader 5 Expert Advisor (EA) for multi-timeframe RSI reversal and
 
 ## 🔧 Advanced Features
 
+### ADX Average Trend Filtering (Core New Feature)
+**Smart Trend Filtering System**: EA now integrates ADX (Average Directional Index) filtering mechanism:
+- **Trend Strength Detection**: Real-time calculation of ADX average over recent N bars
+- **Smart Filtering**: Only allow signals when ADX average is below set threshold
+- **Avoid Counter-Trend Operations**: Effectively filter false reversal signals in strong trends
+- **Focus on Ranging Zones**: Signals concentrated in ranging markets or trend decay zones, significantly improving accuracy
+
 ### Signal Fusion Mechanism
-**New Enhancement**: The EA now implements intelligent signal fusion to eliminate duplicate alerts:
+**Enhanced Feature**: The EA now implements intelligent signal fusion to eliminate duplicate alerts:
 - **Unified Collection**: All timeframe signals are collected into a centralized cache
 - **Priority Filtering**: Same bar, same-type signals only keep the highest timeframe
 - **Quality Enhancement**: Higher timeframes typically provide more reliable signals
 - **Duplicate Elimination**: Completely avoids multiple simultaneous alerts for the same market condition
 
-### Noise Filtering System
+### Triple Noise Reduction System
 The EA implements sophisticated noise reduction through:
 1. **Fractal Pattern Validation**: Signals only trigger on confirmed fractal tops/bottoms
 2. **Extreme Value Requirements**: Divergences require extreme RSI levels
 3. **Time Interval Filtering**: Prevents signal clustering with minimum interval settings
-4. **Signal Fusion**: Multi-timeframe deduplication for cleaner signal output
+4. **ADX Trend Filtering**: Filter counter-trend signals in strong trends
+5. **Signal Fusion**: Multi-timeframe deduplication for cleaner signal output
 
 ### Multi-Language Support
 Switch between Chinese and English interfaces using the `Use_Chinese` parameter:
@@ -91,21 +104,25 @@ Configurable alert system supporting:
 ## 📈 Usage Recommendations
 
 ### Optimal Settings
-- **High Volatility Markets**: Increase `MinSignalInterval` to reduce noise
-- **Trending Markets**: Focus on 2-4 complementary timeframes
-- **Range-bound Markets**: Use standard settings with close monitoring
+- **High Volatility Markets**: Increase `MinSignalInterval` to reduce noise, adjust `ADX_Threshold` to 20-25
+- **Ranging Markets**: Lower `ADX_Threshold` to 15-20, increase signal sensitivity
+- **Trending Markets**: Raise `ADX_Threshold` to 25-30, focus on filtering counter-trend signals
+- **Instrument-Specific Optimization**:
+  - Gold/Forex: ADX_Threshold = 20-25
+  - Indices/Stocks: ADX_Threshold = 25-30
 
 ### Trading Strategy
 - Use signals as **trading assistance**, not automated entry/exit points
 - Combine with fundamental analysis and market structure
 - Test thoroughly in demo environment before live trading
 - Implement proper risk management and position sizing
+- **ADX filtering significantly improves signal quality but reduces quantity**
 
 ### Timeframe Selection
 Recommended timeframe combinations:
-- **Scalping**: M1, M5, M15, M30
-- **Day Trading**: M15, M30, H1, H4
-- **Swing Trading**: H1, H4, D1, W1
+- **Day Trading**: M30, H1, H4
+- **Swing Trading**: H1, H4, D1
+- **Long-term Analysis**: H4, D1, W1
 
 ## ⚠️ Risk Disclaimer
 
@@ -121,6 +138,24 @@ Recommended timeframe combinations:
 - **Language**: MQL5
 - **Dependencies**: Trade.mqh library (included in MT5)
 - **Chart Requirements**: Any chart with sufficient historical data
+
+## 📝 Changelog
+
+### Latest Version Features
+- **New**: ADX average trend filtering - Signals only in ranging/weak trend zones, greatly reducing false positives
+- **New**: Triple noise reduction system - Traditional filtering + Signal fusion + ADX filtering
+- **Updated**: Monitoring timeframes adjusted to max 4 (TF1-TF4), optimizing performance
+- Multi-timeframe RSI monitoring and advanced divergence detection
+- Bilingual interface support
+- One-click signal clearing and position management
+- Customizable visual and audio alerts
+- Clean, non-intrusive UI design
+
+### ADX Filtering Enhancement
+- Smart trend strength detection and filtering
+- Customizable ADX threshold and averaging window
+- Significantly improves signal quality, reduces false alerts
+- Especially suitable for ranging markets and trend reversal capture
 
 ## 📝 Changelog
 
@@ -142,6 +177,17 @@ Recommended timeframe combinations:
 ## 🔍 Troubleshooting
 
 ### Common Issues
+
+**Too few signals?**
+- This may be normal behavior with ADX filtering active
+- Appropriately raise `ADX_Threshold` (e.g., from 20 to 25)
+- Increase `ADX_Avg_Window` for smoother filtering
+- Adjust `Extreme_Oversold`/`Extreme_Overbought` thresholds
+
+**How to verify ADX filtering effectiveness?**
+- Check ADX filtering information in MT5 logs
+- Compare signal quantity with/without ADX filtering
+- Test different ADX parameters in Strategy Tester
 
 **Buttons not displaying?**
 - Ensure EA is in `MQL5/Experts` folder, not Indicators
@@ -174,3 +220,7 @@ For technical issues or questions:
 ## 📄 License
 
 This project is provided as-is for educational and trading purposes. Use at your own risk.
+
+---
+
+*Last Updated: August 2025*

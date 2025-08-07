@@ -1,8 +1,10 @@
 # RSI Alert Final Edition Technical Documentation
+## (August 2025 Update - Multi-Timeframe + ADX Average Noise Filtering)
 
 ## 📋 Table of Contents
 
 - [Features Overview](#features-overview)
+- [Core Algorithm Flow](#core-algorithm-flow)
 - [Main Parameters](#main-parameters)
 - [Functions and Interface](#functions-and-interface)
 - [Typical Usage Guidelines](#typical-usage-guidelines)
@@ -19,35 +21,96 @@
 
 ## 🚀 Features Overview
 
-This EA supports multi-timeframe RSI reversal and bullish/bearish divergence automatic monitoring.
+This EA is an automated signal monitoring tool specifically developed for multi-timeframe RSI divergence trading systems, supporting multi-timeframe fusion divergence and RSI critical crossing signals.
 
 ### Core Features
 
+- ✅ **Multi-Timeframe Fusion**: Supports M30, H1, H4, D1 and other multi-timeframe synchronous monitoring
+- ✅ **ADX Average Noise Filtering**: Alerts only in ranging/weak trend zones, filtering strong trend false signals
+- ✅ **Signal Fusion Mechanism**: Only keep strongest signal per bar across timeframes, greatly reducing noise
 - ✅ Manual Chinese/English interface switching
-- ✅ Integrated noise reduction (pattern + extreme + interval) filtering
-- ✅ **Signal Fusion Mechanism**: Only keep strongest signal per bar across timeframes
 - ✅ Minimalist horizontal button operations on charts
 - ✅ One-click signal clearing and position closing
 - ✅ All popup and sound alerts can be disabled
 - ✅ **Fully compatible with MetaTrader 5 platform**
 
+### Application Scenarios
+
+- **Trend Switching/Range Reversal Capture**: Use ADX filtering to capture reversal opportunities in trend decay zones
+- **Structural Divergence Strategy**: Multi-timeframe divergence confirmation improves signal reliability
+- **Algorithmic Secondary Development**: Clear signal caching structure facilitates extension to automated trading systems
+
+---
+
+## 🔄 Core Algorithm Flow
+
+### 2.1 Multi-Timeframe Signal Analysis
+
+Users can customize up to 4 monitoring timeframes (e.g., M30/H1/H4/D1), each running independently:
+
+#### RSI + Divergence Detection Process:
+- **Bullish Divergence**: Extreme oversold + fractal low + structural divergence + bar interval
+- **Bearish Divergence**: Extreme overbought + fractal high + structural divergence + bar interval
+- **Regular Crosses**: RSI crossing overbought/oversold levels
+
+> 📊 **Timeframe Priority**: Only 1 signal allowed per bar, highest timeframe takes priority (D1 > H4 > H1 > M30)
+
+### 2.2 ADX Average Trend Filtering
+
+🎯 **Core Innovation Feature**: Before signals appear, the system will:
+
+1. **Calculate ADX Average**: Take ADX average of recent `ADX_Avg_Window` bars (e.g., 5 bars)
+2. **Trend Strength Assessment**: Only allow signals when average < `ADX_Threshold` (e.g., 25)
+3. **Filter Strong Trends**: Effectively filter false reversal signals in major trend phases
+4. **Focus on Ranging Zones**: Signals occur mostly in ranging or trend decay zones, significantly improving accuracy
+
+> ⚡ **Technical Advantage**: Effectively avoid contrarian trades during strong trends, significantly reducing false positive rate
+
+### 2.3 Signal Deduplication/Fusion
+
+**Unified Processing Flow**:
+1. **Signal Collection**: All signals first collected into cache, not immediately drawn/alerted
+2. **Smart Fusion**: Same bar, same type signals only keep highest timeframe
+3. **Final Output**: Only after fusion completion triggers alerts, arrows, text descriptions, etc.
+
 ---
 
 ## ⚙️ Main Parameters
 
-| Parameter | Description | Recommended Setting |
-|-----------|-------------|---------------------|
-| **RSI_Period** | RSI period | `14` |
-| **Oversold_Level** | Oversold threshold | `30` |
-| **Overbought_Level** | Overbought threshold | `70` |
-| **Extreme_Oversold** | Extreme oversold, effective only for bullish divergence | `20` |
-| **Extreme_Overbought** | Extreme overbought, effective only for bearish divergence | `80` |
-| **Lookback_Bars** | Number of bars to scan back | `30` |
-| **MinDivergenceGap** | Minimum gap between divergence extremes | `5` |
-| **MinSignalInterval** | Minimum signal interval in same direction (bars) | `8` |
-| **TF1...TF5** | Monitoring timeframes, up to 5 | `M15/H1/H4 etc` |
-| **Sound_Alerts** | Enable popup/sound alerts | `true/false` |
-| **Sound_File** | Sound file name | `alert.wav` |
+| Parameter | Description | Recommended Setting | Notes |
+|-----------|-------------|---------------------|-------|
+| **RSI_Period** | RSI calculation period | `14` | Standard RSI parameter |
+| **Oversold_Level** | Oversold threshold | `30` | RSI crossing signal threshold |
+| **Overbought_Level** | Overbought threshold | `70` | RSI crossing signal threshold |
+| **Extreme_Oversold** | Extreme oversold threshold | `20` | Effective only for bullish divergence |
+| **Extreme_Overbought** | Extreme overbought threshold | `80` | Effective only for bearish divergence |
+| **Lookback_Bars** | Detection range historical bars | `30` | Divergence scanning range |
+| **MinDivergenceGap** | Minimum gap between divergence extremes | `5` | Prevent too close divergence points |
+| **MinSignalInterval** | Minimum same-type signal interval | `8` | Prevent frequent signals |
+| **ADX_Period** | ADX calculation period | `14` | **New**: Trend strength indicator |
+| **ADX_Threshold** | ADX average filter ceiling | `25.0` | **New**: Strong trend suppression threshold |
+| **ADX_Avg_Window** | ADX average window | `5` | **New**: e.g., recent 5 bars average |
+| **TF1~TF4** | Monitoring timeframes | `M30/H1/H4/D1` | **Adjusted**: Up to 4 timeframes |
+| **Sound_Alerts** | Enable popup/sound alerts | `true/false` | Can disable all alerts |
+| **Sound_File** | Sound file name | `alert.wav` | Custom sound file |
+| **Use_Chinese** | Use Chinese interface | `true/false` | Chinese/English switching |
+
+### 🎯 ADX Parameter Details
+
+#### ADX_Threshold (ADX Average Filter Ceiling)
+- **Low Settings** (15-20): Stricter filtering, signals only in very weak trends
+- **Standard Settings** (20-25): Balanced filtering, suitable for most instruments and timeframes
+- **High Settings** (25-30): Loose filtering, allows signals in moderate trends
+
+#### ADX_Avg_Window (ADX Average Window)
+- **Small Window** (3-5 bars): Fast response to trend changes, but may be affected by short-term volatility
+- **Standard Window** (5-8 bars): Balance response speed and stability
+- **Large Window** (8-12 bars): More stable but slower response
+
+> 💡 **Parameter Tuning Suggestions**:
+> - **Gold/Forex Ranging Markets**: ADX_Threshold < 25, ADX_Avg_Window = 5
+> - **Index/Stock High Volatility**: Appropriately increase ADX_Threshold to 30
+> - **High Frequency Trading**: Reduce ADX_Avg_Window to 3-5
 | **Use_Chinese** | Use Chinese interface | `true/false` |
 
 ---
@@ -72,11 +135,21 @@ This EA supports multi-timeframe RSI reversal and bullish/bearish divergence aut
 - Divergence triggers only under extreme oversold/overbought conditions with established patterns and sufficient interval from last signal, greatly reducing duplicate/false signals
 - Each timeframe operates independently with separate counting and monitoring
 
-#### 🎯 Signal Fusion Mechanism (New)
+#### 🎯 Signal Fusion Mechanism
 - **Unified Collection**: All monitored timeframe signals are collected into a unified cache
 - **Smart Filtering**: For same bar same-type signals (bullish/bearish divergence), only keep the **highest timeframe** signal
 - **Avoid Duplicates**: Completely eliminate duplicate signal alerts at the same time point
 - **Enhanced Quality**: Higher timeframe signals are typically more reliable with higher priority
+
+#### ⚡ ADX Average Filtering Mechanism (Core New Feature)
+- **Trend Strength Detection**: Real-time calculation of ADX average over recent N bars
+- **Smart Filtering**: Only allow signals when ADX average is below set threshold
+- **Avoid Counter-Trend Operations**: Effectively filter false reversal signals in strong trends
+- **Focus on Ranging Zones**: Signals concentrated in ranging markets or trend decay zones, significantly improving accuracy
+
+> 📊 **Triple Noise Reduction System**: Traditional noise reduction + Signal fusion + ADX filtering, achieving extremely low false positive rate with high-quality signal output.
+
+> 🔬 **ADX Filtering Principle**: ADX (Average Directional Index) measures trend strength. When ADX average is low, it indicates the market is in ranging or trend decay state, making divergence and reversal signals more reliable. Counter-trend signals during strong trend periods (high ADX average) are mostly noise, which the system intelligently filters out.
 
 > 📊 **Working Principle**: When each bar completes, the system checks if multiple timeframes generated same-type signals on that bar, automatically keeps the largest timeframe signal (e.g., H4 over H1, H1 over M15), discards other signals, and only fused signals trigger alerts and chart markers.
 
@@ -95,10 +168,42 @@ This EA supports multi-timeframe RSI reversal and bullish/bearish divergence aut
 
 > 💡 **Best Practice Guide**
 
-1. **Timeframe Selection**: Recommend selecting only 2-4 common timeframe combinations
-2. **Noise Reduction**: In high volatility markets, increase `MinSignalInterval` to reduce noise
-3. **Trading Strategy**: Use signals as trading assistance combined with subjective judgment, not for fully automated trading
-4. **Backtesting**: Supports full functionality backtesting in demo environments
+### Basic Configuration Recommendations
+
+1. **Timeframe Selection**: Prioritize more meaningful medium-to-large timeframes (M30/H1/H4/D1 etc.)
+   - **Intraday Trading**: M30, H1, H4 combination
+   - **Swing Trading**: H1, H4, D1 combination
+   - **Long-term Analysis**: H4, D1, W1 combination
+
+2. **ADX Parameter Optimization**:
+   - **High Volatility Instruments** (e.g., Gold, Oil): ADX_Threshold = 20-25
+   - **Low Volatility Instruments** (e.g., Major Currency Pairs): ADX_Threshold = 25-30
+   - **Ranging Markets**: Lower ADX_Threshold to 15-20, increase signal sensitivity
+   - **Trending Markets**: Raise ADX_Threshold to 25-30, filter more noise
+
+3. **Signal Interval Control**: In high volatility markets, increase `MinSignalInterval` to reduce noise
+
+### Core Advantages and Application Scenarios
+
+#### ⚡ Extremely Low False Positive Rate
+- **ADX Filtering**: Signals only in weak trend/ranging zones, greatly reducing counter-trend trades
+- **Multiple Validation**: Pattern + extreme + interval + trend strength quadruple filtering
+
+#### 🎯 Timeframe Fusion Advantages
+- **Multi-timeframe Criteria**: Only keep key structural points, suitable for right-side following and structural confirmation
+- **Signal Deduplication**: Avoid interference from multiple timeframe simultaneous alerts at same time
+
+#### 📈 Strategy Applicability
+- **Reversal Strategy Friendly**: Suitable for ranging arbitrage, trend reversal capture, structural divergence trading
+- **Secondary Development Ready**: Clear signal caching structure, easy to extend to fully automated trading systems
+
+### Practical Application Recommendations
+
+4. **Trading Strategy**: Use signals as trading assistance combined with subjective judgment, not for fully automated trading
+5. **Backtesting Validation**: Supports full functionality backtesting in demo environments, recommend thorough parameter validation
+6. **Risk Control**: For live trading, recommend starting with low position sizes, combined with stop-loss and take-profit management
+
+> ⚠️ **Important Reminder**: ADX filtering significantly improves signal quality but also reduces signal quantity. Recommend adjusting ADX parameters based on trading style and market characteristics to find the optimal balance between signal quality and quantity.
 
 ---
 
