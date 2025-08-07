@@ -1,8 +1,7 @@
 //+------------------------------------------------------------------+
-//|         RSI Alert Final Edition (by ChatGPT, 手动语言切换)       |
+//|      RSI Alert Final Edition（多周期信号融合降噪·手动语言切换） |
 //+------------------------------------------------------------------+
 #property strict
-
 #include <Trade\Trade.mqh>
 CTrade trade;
 
@@ -31,6 +30,19 @@ ENUM_TIMEFRAMES tfs[5];
 datetime lastBullishTime[5];
 datetime lastBearishTime[5];
 
+//------信号缓存结构体及数组，用于融合降噪------
+struct MySignal {
+    ENUM_TIMEFRAMES tf;
+    datetime t;     // 精确到K线时间
+    string type;    // "BullDiv"/"BearDiv"/"CrossUp"/"CrossDn"
+    double price;
+    double rsi;
+    color col;
+    int arrow;
+};
+MySignal sigbuf[1000];
+int sigcnt=0;
+
 #define BTN_WIDTH 60
 #define BTN_HEIGHT 26
 #define BTN_PAD   10
@@ -58,12 +70,14 @@ void OnDeinit(const int reason)
 }
 
 //+------------------------------------------------------------------+
-//| 核心轮询                                                         |
+//| 核心轮询+信号融合                                                |
 //+------------------------------------------------------------------+
 void OnTick()
 {
     DrawPanel();
+    sigcnt=0;
     for(int i=0; i<ArraySize(tfs); i++) AnalyzeTF(tfs[i], i);
+    MergeAndDrawSignals(); // 信号融合+画图+报警
 }
 
 //+------------------------------------------------------------------+
@@ -162,7 +176,7 @@ void CloseAllPositions()
 }
 
 //+------------------------------------------------------------------+
-//| 多周期RSI+背离信号检测(含降噪)                                   |
+//| 多周期RSI+背离信号检测(收集到缓存)                               |
 //+------------------------------------------------------------------+
 void AnalyzeTF(ENUM_TIMEFRAMES tf, int idx)
 {
@@ -174,71 +188,124 @@ void AnalyzeTF(ENUM_TIMEFRAMES tf, int idx)
     datetime times[]; ArraySetAsSeries(times,true);
     if(CopyTime(_Symbol,tf,0,Lookback_Bars,times)<=0) return;
 
-    // 多重过滤降噪，先找背离信号
-    //------底背离（极端超卖+分型+分段+间隔限制）------
+    //------底背离------
     for(int i=MinDivergenceGap; i<Lookback_Bars-MinDivergenceGap; i++)
     {
-        //分型底且RSI极低且与前一分型有间隔
         bool isFractal = (closes[i]<closes[i-1] && closes[i]<closes[i+1]);
         bool isExtreme = (rsiBuf[i]<Extreme_Oversold && rsiBuf[i]<Oversold_Level);
         bool enoughGap = (times[i]-lastBullishTime[idx]>PeriodSeconds(tf)*MinSignalInterval);
-
-        // 背离形态要求：当前底点高于左侧底点，且RSI低点更低
         bool isDivergence = (closes[i]>closes[i-MinDivergenceGap] && rsiBuf[i]<rsiBuf[i-MinDivergenceGap]);
 
         if(isFractal && isExtreme && enoughGap && isDivergence)
         {
-            Notify(tf, Use_Chinese?"底背离":"Bullish Divergence", times[i], closes[i], clrLime, rsiBuf[i], 233);
+            CollectSignal(tf, times[i], "BullDiv", closes[i], rsiBuf[i], clrLime, 233);
             lastBullishTime[idx]=times[i];
-            break; //同一周期只标一次
+            break;
         }
     }
-    //------顶背离（极端超买+分型+分段+间隔限制）------
+    //------顶背离------
     for(int i=MinDivergenceGap; i<Lookback_Bars-MinDivergenceGap; i++)
     {
         bool isFractal = (closes[i]>closes[i-1] && closes[i]>closes[i+1]);
         bool isExtreme = (rsiBuf[i]>Extreme_Overbought && rsiBuf[i]>Overbought_Level);
         bool enoughGap = (times[i]-lastBearishTime[idx]>PeriodSeconds(tf)*MinSignalInterval);
-
-        // 背离形态要求：当前顶点低于左侧顶点，且RSI高点更高
         bool isDivergence = (closes[i]<closes[i-MinDivergenceGap] && rsiBuf[i]>rsiBuf[i-MinDivergenceGap]);
         if(isFractal && isExtreme && enoughGap && isDivergence)
         {
-            Notify(tf, Use_Chinese?"顶背离":"Bearish Divergence", times[i], closes[i], clrOrange, rsiBuf[i], 234);
+            CollectSignal(tf, times[i], "BearDiv", closes[i], rsiBuf[i], clrOrange, 234);
             lastBearishTime[idx]=times[i];
             break;
         }
     }
     //------普通交叉------
     if(rsiBuf[1]<Oversold_Level && rsiBuf[0]>Oversold_Level)
-        Notify(tf, (Use_Chinese?"上穿超卖":"CrossUp"), times[0], closes[0], clrLime, rsiBuf[0], 233);
+        CollectSignal(tf, times[0], "CrossUp", closes[0], rsiBuf[0], clrLime, 233);
     if(rsiBuf[1]>Overbought_Level && rsiBuf[0]<Overbought_Level)
-        Notify(tf, (Use_Chinese?"下穿超买":"CrossDn"), times[0], closes[0], clrOrange, rsiBuf[0], 234);
+        CollectSignal(tf, times[0], "CrossDn", closes[0], rsiBuf[0], clrOrange, 234);
 }
 
 //+------------------------------------------------------------------+
-//| 画箭头、弹窗、声音、文字                                         |
+//| 信号收集进缓存（不立刻画图）                                     |
 //+------------------------------------------------------------------+
-void Notify(ENUM_TIMEFRAMES tf, string label, datetime t, double price, color col, double rsiValue, int arrowcode)
+void CollectSignal(ENUM_TIMEFRAMES tf, datetime t, string type, double price, double rsi, color col, int arrow)
 {
-    string tfstr=StringSubstr(EnumToString(tf),7);
-    string objName=StringFormat("RSI_%s_%s_%s",label,tfstr,TimeToString(t,TIME_MINUTES));
+    if(sigcnt>=1000) return;
+    sigbuf[sigcnt].tf=tf; sigbuf[sigcnt].t=t; sigbuf[sigcnt].type=type;
+    sigbuf[sigcnt].price=price; sigbuf[sigcnt].rsi=rsi; sigbuf[sigcnt].col=col; sigbuf[sigcnt].arrow=arrow;
+    sigcnt++;
+}
+
+//+------------------------------------------------------------------+
+//| 多周期信号融合：同K线仅保留最高周期信号，再触发                   |
+//+------------------------------------------------------------------+
+void MergeAndDrawSignals()
+{
+    // 标记已输出的信号K线
+    datetime doneTimes[1000]; int doneCount=0;
+    string doneTypes[1000];
+
+    for(int i=0;i<sigcnt;i++)
+    {
+        // 跳过已处理
+        bool skip=false;
+        for(int j=0;j<doneCount;j++)
+        {
+            if(sigbuf[i].t==doneTimes[j] && sigbuf[i].type==doneTypes[j]) {
+                skip=true; break;
+            }
+        }
+        if(skip) continue;
+
+        // 查找同K线同类型中最高周期
+        int best=-1;
+        for(int k=0;k<sigcnt;k++)
+        {
+            if(sigbuf[k].t==sigbuf[i].t && sigbuf[k].type==sigbuf[i].type)
+            {
+                if(best==-1 || sigbuf[k].tf>sigbuf[best].tf)
+                    best=k;
+            }
+        }
+        // 输出最高周期信号
+        if(best!=-1) {
+            DrawSignal(sigbuf[best]);
+            // 标记已输出
+            doneTimes[doneCount]=sigbuf[best].t;
+            doneTypes[doneCount]=sigbuf[best].type;
+            doneCount++;
+        }
+    }
+    sigcnt=0;
+}
+
+//+------------------------------------------------------------------+
+//| 实际画箭头/报警（同你Notify内容）                                 |
+//+------------------------------------------------------------------+
+void DrawSignal(MySignal &sig)
+{
+    string tfstr=StringSubstr(EnumToString(sig.tf),7);
+    string label;
+    if(sig.type=="BullDiv")  label=Use_Chinese?"底背离":"Bullish Divergence";
+    else if(sig.type=="BearDiv") label=Use_Chinese?"顶背离":"Bearish Divergence";
+    else if(sig.type=="CrossUp") label=Use_Chinese?"上穿超卖":"CrossUp";
+    else if(sig.type=="CrossDn") label=Use_Chinese?"下穿超买":"CrossDn";
+    else label=sig.type;
+    string objName=StringFormat("RSI_%s_%s_%s",label,tfstr,TimeToString(sig.t,TIME_MINUTES));
     // 箭头
-    ObjectCreate(0,objName,OBJ_ARROW,0,t,price);
-    ObjectSetInteger(0,objName,OBJPROP_COLOR,col);
+    ObjectCreate(0,objName,OBJ_ARROW,0,sig.t,sig.price);
+    ObjectSetInteger(0,objName,OBJPROP_COLOR,sig.col);
     ObjectSetInteger(0,objName,OBJPROP_WIDTH,2);
-    ObjectSetInteger(0,objName,OBJPROP_ARROWCODE,arrowcode); // 233↑ 234↓
+    ObjectSetInteger(0,objName,OBJPROP_ARROWCODE,sig.arrow); // 233↑ 234↓
     // 文字
     string txt=objName+"_txt";
-    ObjectCreate(0,txt,OBJ_TEXT,0,t,price*1.0012);
-    ObjectSetInteger(0,txt,OBJPROP_COLOR,col);
+    ObjectCreate(0,txt,OBJ_TEXT,0,sig.t,sig.price*1.0012);
+    ObjectSetInteger(0,txt,OBJPROP_COLOR,sig.col);
     ObjectSetInteger(0,txt,OBJPROP_FONTSIZE,9);
-    ObjectSetString(0,txt,OBJPROP_TEXT,label+" "+tfstr+" RSI:"+DoubleToString(rsiValue,1));
+    ObjectSetString(0,txt,OBJPROP_TEXT,label+" "+tfstr+" RSI:"+DoubleToString(sig.rsi,1));
     // 报警
-    string msg=label+" "+tfstr+" "+DoubleToString(price,4)+" RSI:"+DoubleToString(rsiValue,1);
+    string msg=label+" "+tfstr+" "+DoubleToString(sig.price,4)+" RSI:"+DoubleToString(sig.rsi,1);
     if(Sound_Alerts) {
-        Alert(msg);
-        PlaySound(Sound_File);
+        Alert(msg); PlaySound(Sound_File);
     }
     Print(msg);
 }

@@ -7,7 +7,8 @@ A powerful MetaTrader 5 Expert Advisor (EA) for multi-timeframe RSI reversal and
 - **Multi-timeframe RSI monitoring** - Monitor up to 5 different timeframes simultaneously
 - **RSI reversal detection** - Automatic detection of oversold/overbought crossovers
 - **Divergence analysis** - Advanced bullish and bearish divergence detection
-- **Noise filtering** - Integrated filtering using fractal patterns, extreme values, and signal intervals
+- **Signal fusion mechanism** - Only strongest signal per bar across timeframes, avoiding duplicates
+- **Advanced noise filtering** - Integrated filtering using fractal patterns, extreme values, and signal intervals
 - **Bilingual interface** - Switch between Chinese and English interfaces
 - **One-click controls** - Clear all signals and close all positions with single button clicks
 - **Customizable alerts** - Optional popup and sound notifications
@@ -61,11 +62,19 @@ A powerful MetaTrader 5 Expert Advisor (EA) for multi-timeframe RSI reversal and
 
 ## 🔧 Advanced Features
 
+### Signal Fusion Mechanism
+**New Enhancement**: The EA now implements intelligent signal fusion to eliminate duplicate alerts:
+- **Unified Collection**: All timeframe signals are collected into a centralized cache
+- **Priority Filtering**: Same bar, same-type signals only keep the highest timeframe
+- **Quality Enhancement**: Higher timeframes typically provide more reliable signals
+- **Duplicate Elimination**: Completely avoids multiple simultaneous alerts for the same market condition
+
 ### Noise Filtering System
 The EA implements sophisticated noise reduction through:
 1. **Fractal Pattern Validation**: Signals only trigger on confirmed fractal tops/bottoms
 2. **Extreme Value Requirements**: Divergences require extreme RSI levels
 3. **Time Interval Filtering**: Prevents signal clustering with minimum interval settings
+4. **Signal Fusion**: Multi-timeframe deduplication for cleaner signal output
 
 ### Multi-Language Support
 Switch between Chinese and English interfaces using the `Use_Chinese` parameter:
@@ -115,13 +124,20 @@ Recommended timeframe combinations:
 
 ## 📝 Changelog
 
-### Current Version Features
+### Latest Version Features
+- **NEW**: Signal fusion mechanism - eliminates duplicate alerts across timeframes
 - Multi-timeframe RSI monitoring (up to 5 timeframes)
 - Advanced divergence detection with noise filtering
 - Bilingual interface support
 - One-click signal clearing and position management
 - Customizable visual and audio alerts
 - Clean, non-intrusive UI design
+
+### Signal Fusion Enhancement
+- Unified signal collection across all monitored timeframes
+- Automatic prioritization by timeframe hierarchy
+- Elimination of simultaneous duplicate alerts
+- Enhanced signal quality and reduced noise
 
 ## 🔍 Troubleshooting
 
@@ -141,6 +157,12 @@ Recommended timeframe combinations:
 - Increase `MinSignalInterval` value
 - Raise `Extreme_Oversold`/`Extreme_Overbought` thresholds
 - Reduce number of monitored timeframes
+- The new signal fusion mechanism automatically reduces duplicate alerts
+
+**Missing signals from certain timeframes?**
+- This is normal behavior with signal fusion enabled
+- Higher timeframes take priority over lower ones
+- Check logs to see all detected signals before fusion
 
 ## 📞 Support
 

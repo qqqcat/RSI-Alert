@@ -25,6 +25,7 @@ This EA supports multi-timeframe RSI reversal and bullish/bearish divergence aut
 
 - ✅ Manual Chinese/English interface switching
 - ✅ Integrated noise reduction (pattern + extreme + interval) filtering
+- ✅ **Signal Fusion Mechanism**: Only keep strongest signal per bar across timeframes
 - ✅ Minimalist horizontal button operations on charts
 - ✅ One-click signal clearing and position closing
 - ✅ All popup and sound alerts can be disabled
@@ -67,8 +68,17 @@ This EA supports multi-timeframe RSI reversal and bullish/bearish divergence aut
 
 ### 🔧 Noise Reduction and Signal Filtering
 
+#### Traditional Noise Reduction
 - Divergence triggers only under extreme oversold/overbought conditions with established patterns and sufficient interval from last signal, greatly reducing duplicate/false signals
 - Each timeframe operates independently with separate counting and monitoring
+
+#### 🎯 Signal Fusion Mechanism (New)
+- **Unified Collection**: All monitored timeframe signals are collected into a unified cache
+- **Smart Filtering**: For same bar same-type signals (bullish/bearish divergence), only keep the **highest timeframe** signal
+- **Avoid Duplicates**: Completely eliminate duplicate signal alerts at the same time point
+- **Enhanced Quality**: Higher timeframe signals are typically more reliable with higher priority
+
+> 📊 **Working Principle**: When each bar completes, the system checks if multiple timeframes generated same-type signals on that bar, automatically keeps the largest timeframe signal (e.g., H4 over H1, H1 over M15), discards other signals, and only fused signals trigger alerts and chart markers.
 
 ### 🌐 Manual Language Switching
 
@@ -288,7 +298,15 @@ Judgment Conditions:
 
 #### 📊 Noise Reduction Mechanism Summary
 
-> Divergence is determined only on bars with extreme overbought/oversold conditions, clear fractals, and sufficient time from last signal, effectively filtering micro-oscillations and false divergences.
+**Traditional Noise Reduction**: Divergence is determined only on bars with extreme overbought/oversold conditions, clear fractals, and sufficient time from last signal, effectively filtering micro-oscillations and false divergences.
+
+**Signal Fusion Noise Reduction**: Building on traditional noise reduction, adds multi-timeframe signal fusion mechanism:
+1. **Cache Collection**: All monitored timeframe signals first enter unified cache
+2. **Priority Sorting**: Sort by timeframe size (Monthly>Weekly>Daily>4H>1H>15M etc.)
+3. **Same-type Filtering**: Same bar same-type signals only keep highest timeframe
+4. **Final Output**: Only fused signals trigger alerts and markers
+
+> 🎯 **Effect**: Completely avoids "multiple timeframes alerting simultaneously" duplicate interference, significantly improving signal quality and user experience.
 
 ---
 
@@ -326,6 +344,13 @@ Judgment Conditions:
 
 - Can extend `Notify` for multi-strategy parallel operation (combining MACD, CCI and other resonance signals)
 - Can introduce position filtering and trend judgment to improve signal confidence
+- **Signal Fusion Mechanism** can serve as template for extending to other signal types deduplication
+
+### 9.3 Signal Fusion Algorithm Optimization
+
+- Can customize timeframe priority weights, not only by time period but also by success rate
+- Can add signal strength scoring system, combining RSI deviation, price divergence magnitude and other factors
+- Can extend to cross-strategy signal fusion (e.g., RSI+MACD+Bollinger Bands comprehensive signals)
 
 ### 9.3 UI Function Upgrades
 
