@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|      RSI Alert Final Edition（多周期信号融合降噪·手动语言切换） |
+//|   RSI Alert Final Edition（多周期信号融合+ADX趋势过滤·窗口均值） |
 //+------------------------------------------------------------------+
 #property strict
 #include <Trade\Trade.mqh>
@@ -15,26 +15,28 @@ input int    Lookback_Bars     = 30;
 input int    MinDivergenceGap  = 5;     // 顶/底背离最小间隔
 input int    MinSignalInterval = 8;     // 最小信号重复间隔（K线）
 
-input ENUM_TIMEFRAMES TF1 = PERIOD_M15;
-input ENUM_TIMEFRAMES TF2 = PERIOD_M30;
-input ENUM_TIMEFRAMES TF3 = PERIOD_H1;
-input ENUM_TIMEFRAMES TF4 = PERIOD_H4;
-input ENUM_TIMEFRAMES TF5 = PERIOD_D1;
+input int    ADX_Period        = 14;
+input double ADX_Threshold     = 25.0;  // ADX阈值（只在ADX均值<阈值时允许信号）
+input int    ADX_Avg_Window    = 5;     // ADX窗口均值长度
+
+input ENUM_TIMEFRAMES TF1 = PERIOD_M30;
+input ENUM_TIMEFRAMES TF2 = PERIOD_H1;
+input ENUM_TIMEFRAMES TF3 = PERIOD_H4;
+input ENUM_TIMEFRAMES TF4 = PERIOD_D1;
 
 input bool   Sound_Alerts     = true;
 input string Sound_File       = "alert.wav";
 input bool   Use_Chinese      = false;   // <--- 手动语言切换
 
 //====================全局变量====================
-ENUM_TIMEFRAMES tfs[5];
-datetime lastBullishTime[5];
-datetime lastBearishTime[5];
+ENUM_TIMEFRAMES tfs[4];
+datetime lastBullishTime[4];
+datetime lastBearishTime[4];
 
-//------信号缓存结构体及数组，用于融合降噪------
 struct MySignal {
     ENUM_TIMEFRAMES tf;
-    datetime t;     // 精确到K线时间
-    string type;    // "BullDiv"/"BearDiv"/"CrossUp"/"CrossDn"
+    datetime t;
+    string type;
     double price;
     double rsi;
     color col;
@@ -55,7 +57,7 @@ int sigcnt=0;
 //+------------------------------------------------------------------+
 int OnInit()
 {
-    tfs[0]=TF1; tfs[1]=TF2; tfs[2]=TF3; tfs[3]=TF4; tfs[4]=TF5;
+    tfs[0]=TF1; tfs[1]=TF2; tfs[2]=TF3; tfs[3]=TF4;
     ArrayInitialize(lastBullishTime,0); ArrayInitialize(lastBearishTime,0);
     DeleteAllMarkers();
     DrawPanel();
@@ -76,7 +78,7 @@ void OnTick()
 {
     DrawPanel();
     sigcnt=0;
-    for(int i=0; i<ArraySize(tfs); i++) AnalyzeTF(tfs[i], i);
+    for(int i=0; i<ArraySize(tfs); i++) if(tfs[i]>0) AnalyzeTF(tfs[i], i);
     MergeAndDrawSignals(); // 信号融合+画图+报警
 }
 
@@ -90,7 +92,6 @@ void DrawPanel()
     int y = 12;
     int x = w/2 - total_width/2;
 
-    // Clear按钮
     string labelClear = Use_Chinese?" 清除 ":" Clear ";
     ObjectCreate(0,"RSI_Clear",OBJ_BUTTON,0,0,0);
     ObjectSetInteger(0,"RSI_Clear",OBJPROP_XDISTANCE,x);
@@ -104,7 +105,6 @@ void DrawPanel()
     ObjectSetString(0,"RSI_Clear",OBJPROP_TEXT,labelClear);
     ObjectSetInteger(0,"RSI_Clear",OBJPROP_BORDER_TYPE,BORDER_FLAT);
 
-    // Close按钮
     string labelClose = Use_Chinese?" 平仓 ":" Close ";
     ObjectCreate(0,"RSI_CloseAll",OBJ_BUTTON,0,0,0);
     ObjectSetInteger(0,"RSI_CloseAll",OBJPROP_XDISTANCE,x+BTN_WIDTH+BTN_PAD);
@@ -118,9 +118,8 @@ void DrawPanel()
     ObjectSetString(0,"RSI_CloseAll",OBJPROP_TEXT,labelClose);
     ObjectSetInteger(0,"RSI_CloseAll",OBJPROP_BORDER_TYPE,BORDER_FLAT);
 
-    // 状态栏
     string tfStr="";
-    for(int i=0;i<5;i++) if(tfs[i]>0) tfStr+=StringSubstr(EnumToString(tfs[i]),7)+" ";
+    for(int i=0;i<4;i++) if(tfs[i]>0) tfStr+=StringSubstr(EnumToString(tfs[i]),7)+" ";
     string status = (Use_Chinese?"周期: ":"TF: ")+tfStr;
     ObjectCreate(0,"RSI_Status",OBJ_LABEL,0,0,0);
     ObjectSetInteger(0,"RSI_Status",OBJPROP_XDISTANCE,x+2*BTN_WIDTH+BTN_PAD*2+STATUS_PAD);
@@ -176,7 +175,7 @@ void CloseAllPositions()
 }
 
 //+------------------------------------------------------------------+
-//| 多周期RSI+背离信号检测(收集到缓存)                               |
+//| 多周期RSI+背离信号检测(含ADX窗口均值过滤，信号收集到缓存)          |
 //+------------------------------------------------------------------+
 void AnalyzeTF(ENUM_TIMEFRAMES tf, int idx)
 {
@@ -188,6 +187,21 @@ void AnalyzeTF(ENUM_TIMEFRAMES tf, int idx)
     datetime times[]; ArraySetAsSeries(times,true);
     if(CopyTime(_Symbol,tf,0,Lookback_Bars,times)<=0) return;
 
+    // ADX窗口均值过滤
+    bool allowSignal = true;
+    int adxH = iADX(_Symbol,tf,ADX_Period);
+    if(adxH!=INVALID_HANDLE)
+    {
+        double adxBuf[]; ArraySetAsSeries(adxBuf,true);
+        if(CopyBuffer(adxH,0,0,ADX_Avg_Window,adxBuf)>0)
+        {
+            double adxSum=0;
+            for(int a=0;a<ADX_Avg_Window;a++) adxSum+=adxBuf[a];
+            double adxAvg=adxSum/ADX_Avg_Window;
+            if(adxAvg>ADX_Threshold) allowSignal=false;
+        }
+    }
+
     //------底背离------
     for(int i=MinDivergenceGap; i<Lookback_Bars-MinDivergenceGap; i++)
     {
@@ -196,7 +210,7 @@ void AnalyzeTF(ENUM_TIMEFRAMES tf, int idx)
         bool enoughGap = (times[i]-lastBullishTime[idx]>PeriodSeconds(tf)*MinSignalInterval);
         bool isDivergence = (closes[i]>closes[i-MinDivergenceGap] && rsiBuf[i]<rsiBuf[i-MinDivergenceGap]);
 
-        if(isFractal && isExtreme && enoughGap && isDivergence)
+        if(isFractal && isExtreme && enoughGap && isDivergence && allowSignal)
         {
             CollectSignal(tf, times[i], "BullDiv", closes[i], rsiBuf[i], clrLime, 233);
             lastBullishTime[idx]=times[i];
@@ -210,7 +224,7 @@ void AnalyzeTF(ENUM_TIMEFRAMES tf, int idx)
         bool isExtreme = (rsiBuf[i]>Extreme_Overbought && rsiBuf[i]>Overbought_Level);
         bool enoughGap = (times[i]-lastBearishTime[idx]>PeriodSeconds(tf)*MinSignalInterval);
         bool isDivergence = (closes[i]<closes[i-MinDivergenceGap] && rsiBuf[i]>rsiBuf[i-MinDivergenceGap]);
-        if(isFractal && isExtreme && enoughGap && isDivergence)
+        if(isFractal && isExtreme && enoughGap && isDivergence && allowSignal)
         {
             CollectSignal(tf, times[i], "BearDiv", closes[i], rsiBuf[i], clrOrange, 234);
             lastBearishTime[idx]=times[i];
@@ -218,9 +232,9 @@ void AnalyzeTF(ENUM_TIMEFRAMES tf, int idx)
         }
     }
     //------普通交叉------
-    if(rsiBuf[1]<Oversold_Level && rsiBuf[0]>Oversold_Level)
+    if(rsiBuf[1]<Oversold_Level && rsiBuf[0]>Oversold_Level && allowSignal)
         CollectSignal(tf, times[0], "CrossUp", closes[0], rsiBuf[0], clrLime, 233);
-    if(rsiBuf[1]>Overbought_Level && rsiBuf[0]<Overbought_Level)
+    if(rsiBuf[1]>Overbought_Level && rsiBuf[0]<Overbought_Level && allowSignal)
         CollectSignal(tf, times[0], "CrossDn", closes[0], rsiBuf[0], clrOrange, 234);
 }
 
@@ -240,13 +254,11 @@ void CollectSignal(ENUM_TIMEFRAMES tf, datetime t, string type, double price, do
 //+------------------------------------------------------------------+
 void MergeAndDrawSignals()
 {
-    // 标记已输出的信号K线
     datetime doneTimes[1000]; int doneCount=0;
     string doneTypes[1000];
 
     for(int i=0;i<sigcnt;i++)
     {
-        // 跳过已处理
         bool skip=false;
         for(int j=0;j<doneCount;j++)
         {
@@ -256,7 +268,6 @@ void MergeAndDrawSignals()
         }
         if(skip) continue;
 
-        // 查找同K线同类型中最高周期
         int best=-1;
         for(int k=0;k<sigcnt;k++)
         {
@@ -266,10 +277,8 @@ void MergeAndDrawSignals()
                     best=k;
             }
         }
-        // 输出最高周期信号
         if(best!=-1) {
             DrawSignal(sigbuf[best]);
-            // 标记已输出
             doneTimes[doneCount]=sigbuf[best].t;
             doneTypes[doneCount]=sigbuf[best].type;
             doneCount++;
@@ -279,7 +288,7 @@ void MergeAndDrawSignals()
 }
 
 //+------------------------------------------------------------------+
-//| 实际画箭头/报警（同你Notify内容）                                 |
+//| 实际画箭头/报警                                                  |
 //+------------------------------------------------------------------+
 void DrawSignal(MySignal &sig)
 {
@@ -291,18 +300,15 @@ void DrawSignal(MySignal &sig)
     else if(sig.type=="CrossDn") label=Use_Chinese?"下穿超买":"CrossDn";
     else label=sig.type;
     string objName=StringFormat("RSI_%s_%s_%s",label,tfstr,TimeToString(sig.t,TIME_MINUTES));
-    // 箭头
     ObjectCreate(0,objName,OBJ_ARROW,0,sig.t,sig.price);
     ObjectSetInteger(0,objName,OBJPROP_COLOR,sig.col);
     ObjectSetInteger(0,objName,OBJPROP_WIDTH,2);
     ObjectSetInteger(0,objName,OBJPROP_ARROWCODE,sig.arrow); // 233↑ 234↓
-    // 文字
     string txt=objName+"_txt";
     ObjectCreate(0,txt,OBJ_TEXT,0,sig.t,sig.price*1.0012);
     ObjectSetInteger(0,txt,OBJPROP_COLOR,sig.col);
     ObjectSetInteger(0,txt,OBJPROP_FONTSIZE,9);
     ObjectSetString(0,txt,OBJPROP_TEXT,label+" "+tfstr+" RSI:"+DoubleToString(sig.rsi,1));
-    // 报警
     string msg=label+" "+tfstr+" "+DoubleToString(sig.price,4)+" RSI:"+DoubleToString(sig.rsi,1);
     if(Sound_Alerts) {
         Alert(msg); PlaySound(Sound_File);
